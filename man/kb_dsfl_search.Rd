@@ -31,9 +31,10 @@ kb_dsfl_search(
 }
 \value{
 A data frame with IDs, titles, numeric longitude and latitude, location,
-photographer, date, type and URLs, or a list with one decoded response per
-page. The attributes \code{kb_total} and \code{kb_pages_fetched} give
-the number of matching photographs and pages fetched.
+photographer, date, type and image URLs, or a list with one decoded response
+per page. The table converts legacy image links to IIIF URLs. The attributes
+\code{kb_total} and \code{kb_pages_fetched} give the number of matching
+photographs and pages fetched.
 }
 \examples{
 \dontrun{

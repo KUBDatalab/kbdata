@@ -84,8 +84,19 @@ kb_dsfl_table <- function(nodes) {
     date = kb_field(properties, "subjectCreationDate"),
     type = kb_field(properties, "subjectGenre"),
     url = kb_https(kb_field(properties, "subjectLink")),
-    thumbnail_url = kb_https(kb_field(properties, "subjectThumbnailSrc")),
-    image_url = kb_https(kb_field(properties, "subjectImageSrc")),
+    thumbnail_url = kb_dsfl_image_url(kb_field(properties, "subjectThumbnailSrc"), ",150"),
+    image_url = kb_dsfl_image_url(kb_field(properties, "subjectImageSrc"), "full"),
     stringsAsFactors = FALSE
   )
+}
+
+kb_dsfl_image_url <- function(url, size) {
+  legacy <- "^https?://www\\.kb\\.dk/imageService/(?:[wh][0-9]+/)*(.+)\\.jpg$"
+  convert <- grepl(legacy, url, perl = TRUE)
+  if (any(convert)) {
+    identifier <- sub(legacy, "\\1", url[convert], perl = TRUE)
+    url[convert] <- paste0("https://kb-images.kb.dk/", identifier, "/full/",
+                           size, "/0/native.jpg")
+  }
+  kb_https(url)
 }

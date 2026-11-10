@@ -51,3 +51,12 @@ feed <- kbdata:::kb_xml_page(response(kml, type = "application/xml"), "kml", 2)
 photos <- kbdata:::kb_dsfl_table(as.list(feed$records))
 stopifnot(feed$total == 1, feed$last,
           photos$id == "object1", photos$longitude == 10.69, photos$latitude == 55.49)
+stopifnot(identical(
+  kbdata:::kb_dsfl_image_url(c(
+    "http://www.kb.dk/imageService/w150/h150/archive/photo.jpg",
+    "http://kb-images.kb.dk/archive/other/full/,100/0/native.jpg",
+    NA_character_
+  ), ",150"),
+  c("https://kb-images.kb.dk/archive/photo/full/,150/0/native.jpg",
+    "https://kb-images.kb.dk/archive/other/full/,100/0/native.jpg", NA_character_)
+))

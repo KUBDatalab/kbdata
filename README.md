@@ -27,7 +27,7 @@ fotos <- kb_dsfl_search(
 head(fotos[c("title", "date", "longitude", "latitude")])
 ```
 
-`bbox` bruger længde- og breddegrader i WGS 84. Rækkefølgen for en vektor uden navne er vest, syd, øst, nord. Tabellen hentes via KML og kan filtreres på dato, fototype og søgetekst. Brug `format = "json"` til GeoJSON-punkter fra REST-endepunktet med geografisk afgrænsning og paginering. `"rss"`, `"kml"` og `"mods"` giver XML.
+`bbox` bruger længde- og breddegrader i WGS 84. Rækkefølgen for en vektor uden navne er vest, syd, øst, nord. Tabellen hentes via KML, kan filtreres på dato, fototype og søgetekst og omsætter ældre billedlinks til IIIF-adresser. Brug `format = "json"` til GeoJSON-punkter fra REST-endepunktet med geografisk afgrænsning og paginering. `"rss"`, `"kml"` og `"mods"` giver XML.
 
 ## Digitale samlinger og billeder
 
