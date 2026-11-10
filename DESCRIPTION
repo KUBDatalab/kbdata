@@ -1,0 +1,17 @@
+Package: kbdata
+Title: Access Data from the Royal Danish Library
+Version: 0.1.0
+Authors@R: person("KUB Datalab", email = "kubdatalab@kb.dk",
+    role = c("aut", "cre"))
+Description: Search and retrieve aerial photographs, digital collection
+    metadata, and literary texts from the Royal Danish Library. Return
+    analysis-ready data frames, JSON responses, and XML documents.
+License: MIT + file LICENSE
+Encoding: UTF-8
+URL: https://github.com/KUBDatalab/kbdata
+BugReports: https://github.com/KUBDatalab/kbdata/issues
+Imports:
+    httr,
+    jsonlite,
+    utils,
+    xml2

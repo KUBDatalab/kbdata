@@ -1,0 +1,616 @@
+openapi: 3.1.0
+info:
+  title: Royal Danish Library data API
+  version: 0.1.0
+  description: >
+    An independently maintained description of the public data interfaces used by kbdata.
+    It builds on the Royal Danish Library's Swagger 2.0 document and records
+    wire formats and pagination observed on 2026-11-10. The original REST
+    text endpoint and the working Text Portal JSON endpoints are distinct.
+  x-upstream-specification: https://api.kb.dk/data/rest/swagger.json
+externalDocs:
+  description: Royal Danish Library API documentation
+  url: https://github.com/kb-dk/access-digital-objects
+servers:
+  - url: https://api.kb.dk/data/rest/api
+tags:
+  - name: Digital collections
+  - name: Aerial photographs
+  - name: Text collections
+paths:
+  /editions:
+    get:
+      operationId: listCopEditions
+      tags: [Digital collections]
+      summary: List digital collections and their edition identifiers
+      responses:
+        '200':
+          description: Collection editions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CopRecord'
+  /cop:
+    get:
+      operationId: searchCop
+      tags: [Digital collections]
+      summary: Search a digital collection or retrieve an individual object
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Edition, subject or object path.
+          schema:
+            type: string
+          example: /images/billed/2010/okt/billeder/da/
+        - $ref: '#/components/parameters/CopQuery'
+        - name: before
+          in: query
+          description: Lower date bound, equivalent to notBefore on the XML feed.
+          schema:
+            type: string
+            format: date
+        - name: after
+          in: query
+          description: Upper date bound, equivalent to notAfter on the XML feed.
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/ItemsPerPage'
+      responses:
+        '200':
+          description: Page of matching objects
+          headers:
+            Total:
+              description: Number of matching objects across all pages.
+              schema:
+                type: integer
+                minimum: 0
+            Pagination-Count:
+              description: Number of pages at the returned page size.
+              schema:
+                type: integer
+                minimum: 0
+            Pagination-Page:
+              $ref: '#/components/headers/StartIndex'
+            Pagination-Limit:
+              $ref: '#/components/headers/PageLimit'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CopRecord'
+        default:
+          $ref: '#/components/responses/PortalError'
+  /navigation:
+    get:
+      operationId: getCopNavigation
+      tags: [Digital collections]
+      summary: Retrieve the subject tree around a COP subject
+      parameters:
+        - $ref: '#/components/parameters/EditionIdentifier'
+        - name: subjectId
+          in: query
+          required: true
+          description: Subject identifier with the subject prefix.
+          schema:
+            type: string
+            pattern: '^subject[0-9]+$'
+          example: subject841
+      responses:
+        '200':
+          description: OPML 2.0 document with nested outline elements
+          content:
+            application/xml:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/PortalError'
+  /content:
+    get:
+      operationId: getLegacyCopContent
+      tags: [Digital collections]
+      summary: Look up object content through the legacy REST endpoint
+      description: >
+        Described in the upstream Swagger file. Requests for known objects
+        returned HTTP 500 during verification. The package reads image
+        identifiers and constituent pages from the object's MODS feed.
+      parameters:
+        - $ref: '#/components/parameters/EditionIdentifier'
+        - name: objectId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success documented upstream with an unspecified body
+        '500':
+          $ref: '#/components/responses/PortalError'
+  /dsfl:
+    get:
+      operationId: searchDsfl
+      tags: [Aerial photographs]
+      summary: List aerial photographs within a bounding box
+      description: >
+        Returns a JSON array of GeoJSON point features. The XML feed supports
+        date and photo-type filters. In a side-by-side test, the documented
+        notAfter parameter filtered results only on the XML feed.
+      parameters:
+        - $ref: '#/components/parameters/BoundingBox'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/ItemsPerPage'
+      responses:
+        '200':
+          description: Page of matching point features
+          headers:
+            Pagination-Count:
+              description: Number of matching photographs across all pages.
+              schema:
+                type: integer
+                minimum: 0
+            Pagination-Page:
+              $ref: '#/components/headers/StartIndex'
+            Pagination-Limit:
+              $ref: '#/components/headers/PageLimit'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AerialFeature'
+        default:
+          $ref: '#/components/responses/PortalError'
+  /text:
+    get:
+      operationId: searchLegacyText
+      tags: [Text collections]
+      summary: Search the legacy Solr text endpoint
+      description: >
+        The API portal still links to this endpoint. The documented requests
+        returned HTTP 500 during verification. Use /text.json on the Text
+        Portal for the current JSON interface.
+      parameters:
+        - $ref: '#/components/parameters/TextQuery'
+        - name: start
+          in: query
+          description: Zero-based record offset.
+          schema:
+            type: integer
+            minimum: 0
+        - name: rows
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: wt
+          in: query
+          schema:
+            type: string
+            enum: [json]
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: facet
+          in: query
+          schema:
+            type: string
+            enum: ['on', 'off']
+        - name: facetfield
+          in: query
+          schema:
+            type: string
+          example: subcollection_ssi
+        - name: defType
+          in: query
+          schema:
+            type: string
+            enum: [dismax, edismax]
+        - name: indent
+          in: query
+          schema:
+            type: string
+            enum: ['on', 'off']
+      responses:
+        '200':
+          description: Documented Solr response shape
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolrSearch'
+        '500':
+          $ref: '#/components/responses/PortalError'
+  /text.json:
+    servers:
+      - url: https://tekster.kb.dk
+    get:
+      operationId: searchTextPortal
+      tags: [Text collections]
+      summary: Search literary texts in the Text Portal
+      parameters:
+        - $ref: '#/components/parameters/TextQuery'
+        - $ref: '#/components/parameters/Page'
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          example: 10
+        - name: 'f[subcollection_ssi][]'
+          in: query
+          schema:
+            type: string
+          example: adl
+        - name: 'f[author_name_ssim][]'
+          in: query
+          description: Author's exact indexed name.
+          schema:
+            type: string
+          example: Munch-Petersen, Gustaf
+        - name: 'f[type_ssi][]'
+          in: query
+          schema:
+            type: string
+            enum: [work, volume, leaf]
+        - name: 'f[is_editorial_ssi][]'
+          in: query
+          schema:
+            type: string
+            enum: ['yes', 'no']
+      responses:
+        '200':
+          description: Search results and pagination metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TextSearch'
+  /text/{id}.json:
+    servers:
+      - url: https://tekster.kb.dk
+    get:
+      operationId: getTextPortalDocument
+      tags: [Text collections]
+      summary: Retrieve a Text Portal record by its document ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: adl-texts-munp1-shoot-workid72997
+      responses:
+        '200':
+          description: Record with indexed text where available
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [response]
+                properties:
+                  response:
+                    type: object
+                    required: [document]
+                    properties:
+                      document:
+                        $ref: '#/components/schemas/TextRecord'
+        '404':
+          description: Document not found
+  /cop/syndication/images/luftfo/2011/maj/luftfoto/subject203/:
+    servers:
+      - url: https://www.kb.dk
+    get:
+      operationId: searchDsflFeed
+      tags: [Aerial photographs]
+      summary: Search the aerial-photo syndication feed
+      parameters:
+        - $ref: '#/components/parameters/BoundingBox'
+        - $ref: '#/components/parameters/CopQuery'
+        - name: type
+          in: query
+          description: All photos, oblique photos, vertical photos or protocol pages.
+          schema:
+            type: string
+            enum: [all, '1', '2', '3']
+        - $ref: '#/components/parameters/NotBefore'
+        - $ref: '#/components/parameters/NotAfter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/ItemsPerPage'
+        - $ref: '#/components/parameters/FeedFormat'
+      responses:
+        '200':
+          $ref: '#/components/responses/SyndicationFeed'
+  /:
+    servers:
+      - url: https://www.kb.dk/cop/syndication/{resource}
+        variables:
+          resource:
+            default: images/billed/2010/okt/billeder/da
+            description: Slash-separated COP path without leading or trailing slash.
+    get:
+      operationId: searchCopFeed
+      tags: [Digital collections]
+      summary: Retrieve an XML feed for a COP edition, subject or object
+      parameters:
+        - $ref: '#/components/parameters/CopQuery'
+        - $ref: '#/components/parameters/NotBefore'
+        - $ref: '#/components/parameters/NotAfter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/ItemsPerPage'
+        - $ref: '#/components/parameters/FeedFormat'
+      responses:
+        '200':
+          $ref: '#/components/responses/SyndicationFeed'
+  /texts/{document}:
+    servers:
+      - url: https://raw.githubusercontent.com/kb-dk/public-adl-text-sources/master
+    get:
+      operationId: getAdlTeiSource
+      tags: [Text collections]
+      summary: Retrieve an ADL volume as TEI XML from KB's source repository
+      parameters:
+        - name: document
+          in: path
+          required: true
+          schema:
+            type: string
+          example: hcaeventyr01val.xml
+      responses:
+        '200':
+          description: TEI XML document served as plain text
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: File not found
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: One-based page number.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    ItemsPerPage:
+      name: itemsPerPage
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+    EditionIdentifier:
+      name: identifier
+      in: query
+      required: true
+      description: Edition path without a language suffix.
+      schema:
+        type: string
+      example: /images/billed/2010/okt/billeder/
+    BoundingBox:
+      name: bbo
+      in: query
+      required: true
+      description: WGS 84 coordinates as east,north,west,south.
+      schema:
+        type: string
+      example: '10.70,55.52,10.65,55.47'
+    CopQuery:
+      name: query
+      in: query
+      schema:
+        type: string
+      example: Kierkegaard
+    TextQuery:
+      name: q
+      in: query
+      schema:
+        type: string
+      example: Jerusalem
+    NotBefore:
+      name: notBefore
+      in: query
+      description: Lower date bound.
+      schema:
+        type: string
+        format: date
+    NotAfter:
+      name: notAfter
+      in: query
+      description: Upper date bound.
+      schema:
+        type: string
+        format: date
+    FeedFormat:
+      name: format
+      in: query
+      schema:
+        type: string
+        enum: [rss, kml, mods]
+        default: rss
+  headers:
+    StartIndex:
+      description: One-based index of the first result on the page.
+      schema:
+        type: integer
+        minimum: 1
+    PageLimit:
+      description: Page size used by the service.
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    PortalError:
+      description: Error response from the portal
+      content:
+        text/plain:
+          schema:
+            type: string
+    SyndicationFeed:
+      description: >
+        XML with an rss, kml or modsCollection root, depending on format.
+        OpenSearch metadata includes startIndex, itemsPerPage and totalResults.
+      content:
+        application/xml:
+          schema:
+            type: string
+  schemas:
+    CopRecord:
+      type: object
+      properties:
+        title:
+          type: [string, 'null']
+        link:
+          type: [string, 'null']
+        description:
+          type: [string, 'null']
+        thumbnailURI:
+          type: [string, 'null']
+        imageURI:
+          type: [string, 'null']
+        identifier:
+          type: [string, 'null']
+    AerialFeature:
+      type: object
+      required: [type, geometry, properties]
+      properties:
+        type:
+          const: Feature
+        geometry:
+          type: object
+          required: [type, coordinates]
+          properties:
+            type:
+              const: Point
+            coordinates:
+              type: array
+              description: Longitude then latitude.
+              minItems: 2
+              maxItems: 2
+              items:
+                type: number
+        properties:
+          type: object
+          properties:
+            name:
+              type: [string, 'null']
+            thumbnail:
+              type: [string, 'null']
+            src:
+              type: [string, 'null']
+            genre:
+              type: [string, 'null']
+            geographic:
+              type: [string, 'null']
+            subjectCreationDate:
+              type: [string, 'null']
+            recordCreationDate:
+              type: [string, 'null']
+            recordChangeDate:
+              type: [string, 'null']
+    TextRecord:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        xmlid_ssi:
+          type: string
+        url_ssi:
+          type: string
+        subcollection_ssi:
+          type: string
+        type_ssi:
+          type: string
+        cat_ssi:
+          type: string
+        work_title_tesim:
+          type: array
+          items:
+            type: string
+        volume_title_tesim:
+          type: array
+          items:
+            type: string
+        author_name_ssim:
+          type: array
+          items:
+            type: string
+        author_nasim:
+          type: array
+          items:
+            type: string
+        text_tesim:
+          type: array
+          items:
+            type: string
+        copyright_ssi:
+          type: string
+    TextSearch:
+      type: object
+      required: [data, meta]
+      properties:
+        links:
+          type: object
+          additionalProperties:
+            type: string
+        meta:
+          type: object
+          required: [pages]
+          properties:
+            pages:
+              type: object
+              required: [current_page, total_pages, limit_value, total_count]
+              properties:
+                current_page:
+                  type: integer
+                  minimum: 1
+                next_page:
+                  type: [integer, 'null']
+                prev_page:
+                  type: [integer, 'null']
+                total_pages:
+                  type: integer
+                  minimum: 0
+                limit_value:
+                  type: integer
+                  minimum: 1
+                offset_value:
+                  type: integer
+                  minimum: 0
+                total_count:
+                  type: integer
+                  minimum: 0
+        data:
+          type: array
+          items:
+            type: object
+            required: [id, attributes]
+            properties:
+              id:
+                type: string
+              attributes:
+                $ref: '#/components/schemas/TextRecord'
+    SolrSearch:
+      type: object
+      required: [response]
+      properties:
+        response:
+          type: object
+          required: [numFound, start, docs]
+          properties:
+            numFound:
+              type: integer
+              minimum: 0
+            start:
+              type: integer
+              minimum: 0
+            docs:
+              type: array
+              items:
+                $ref: '#/components/schemas/TextRecord'
