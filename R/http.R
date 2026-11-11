@@ -2,7 +2,7 @@ kb_portal <- "https://api.kb.dk/data/rest/api"
 kb_syndication <- "https://www.kb.dk/cop/syndication"
 kb_tekster <- "https://tekster.kb.dk/text"
 
-kb_get <- function(url, query = list()) {
+kb_get <- function(url, query = list(), handle = NULL, reauthenticate = NULL) {
   query <- lapply(query, function(value) {
     if (is.numeric(value)) {
       format(value, trim = TRUE, scientific = FALSE, decimal.mark = ".")
@@ -11,12 +11,16 @@ kb_get <- function(url, query = list()) {
     }
   })
   response <- httr::RETRY(
-    "GET", url, query = query,
+    "GET", url, query = query, handle = handle,
     httr::user_agent(paste0("kbdata/", utils::packageVersion("kbdata"))),
     httr::timeout(getOption("kbdata.timeout", 30)),
     times = 3, pause_cap = 4, quiet = TRUE,
     terminate_on = setdiff(400:599, c(429L, 502L, 503L, 504L))
   )
+  if (httr::status_code(response) == 401L && !is.null(reauthenticate)) {
+    reauthenticate()
+    return(kb_get(url, query, handle = handle))
+  }
   if (httr::http_error(response)) {
     hint <- if (identical(url, paste0(kb_portal, "/text"))) {
       ' Try source = "tekster" for the current Text Portal.'
@@ -72,8 +76,8 @@ kb_count <- function(value) {
   value
 }
 
-kb_collect <- function(fetch_page, page, max_pages, table = NULL) {
-  kb_check_integer(page, "page")
+kb_collect <- function(fetch_page, page, max_pages, table = NULL, last_page = Inf) {
+  kb_check_integer(page, "page", max = min(last_page, .Machine$integer.max))
   kb_check_integer(max_pages, "max_pages", infinite = TRUE)
   pages <- list()
   total <- NA_real_
@@ -90,6 +94,11 @@ kb_collect <- function(fetch_page, page, max_pages, table = NULL) {
     }
     if (length(result$records) == 0L || isTRUE(result$last) ||
         length(pages) >= max_pages) {
+      break
+    }
+    if (page >= last_page) {
+      warning("KB's pagination limit was reached. Narrow the search for further results.",
+              call. = FALSE)
       break
     }
     page <- as.double(page) + 1

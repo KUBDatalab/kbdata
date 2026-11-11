@@ -60,3 +60,27 @@ stopifnot(identical(
   c("https://kb-images.kb.dk/archive/photo/full/,150/0/native.jpg",
     "https://kb-images.kb.dk/archive/other/full/,100/0/native.jpg", NA_character_)
 ))
+
+# The spring clock change makes this local broadcast day 23 hours long.
+params <- kbdata:::kb_dr_query(NULL, "tv", c("DR 1", "DR 2"), NULL,
+                               "2024-03-31", "2024-03-31")
+stopifnot(identical(unname(unlist(params[names(params) == "fq"])), c(
+  'origin:"ds.tv"', '(creator_affiliation_facet:"DR 1" OR creator_affiliation_facet:"DR 2")',
+  "startTime:[2024-03-30T23:00:00Z TO 2024-03-31T22:00:00Z}"
+)))
+
+seen <- numeric()
+limit_warning <- FALSE
+limited <- withCallingHandlers(
+  kbdata:::kb_collect(fetch, page = 1L, max_pages = Inf, last_page = 2L),
+  warning = function(condition) {
+    limit_warning <<- grepl("pagination limit", conditionMessage(condition))
+    invokeRestart("muffleWarning")
+  }
+)
+stopifnot(limit_warning, identical(seen, c(1, 2)), length(limited) == 2L,
+          attr(limited, "kb_total") == 3)
+
+empty <- kbdata:::kb_dr_table(list())
+stopifnot(nrow(empty) == 0L, inherits(empty$start_time, "POSIXct"),
+          inherits(empty$broadcast_date, "Date"), is.character(empty$url))

@@ -1,12 +1,14 @@
 openapi: 3.1.0
 info:
   title: Royal Danish Library data API
-  version: 0.1.0
+  version: 0.2.0
   description: >
     An independently maintained description of the public data interfaces used by kbdata.
     It builds on the Royal Danish Library's Swagger 2.0 document and records
     wire formats and pagination observed on 2026-11-10. The original REST
     text endpoint and the working Text Portal JSON endpoints are distinct.
+    The DR-arkivet paths describe the public catalogue web interface observed
+    on 2026-11-11, including its anonymous session.
   x-upstream-specification: https://api.kb.dk/data/rest/swagger.json
 externalDocs:
   description: Royal Danish Library API documentation
@@ -17,6 +19,7 @@ tags:
   - name: Digital collections
   - name: Aerial photographs
   - name: Text collections
+  - name: DR-arkivet
 paths:
   /editions:
     get:
@@ -368,7 +371,146 @@ paths:
                 type: string
         '404':
           description: File not found
+  /ds-api/bff/v1/authenticate/:
+    servers:
+      - url: https://www.kb.dk
+    get:
+      operationId: openDrArchiveSession
+      tags: [DR-arkivet]
+      summary: Open an anonymous catalogue session
+      externalDocs:
+        description: KB's backend-for-frontend OpenAPI source
+        url: https://github.com/kb-dk/ds-backend/blob/main/bff/src/main/openapi/bff-openapi_v1.yaml
+      responses:
+        '200':
+          description: Anonymous session cookie issued
+          headers:
+            Set-Cookie:
+              description: Authorization cookie scoped to the DR archive backend.
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/PortalError'
+  /ds-api/bff/v1/proxy/search/:
+    servers:
+      - url: https://www.kb.dk
+    get:
+      operationId: searchDrArchive
+      tags: [DR-arkivet]
+      summary: Search broadcast metadata or count matching records by facet
+      security:
+        - DrArchiveSession: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Solr query for the catalogue metadata.
+          schema:
+            type: string
+          example: '"Bamse og Kylling"'
+        - name: fq
+          in: query
+          description: Repeat for media, channel, genre, and UTC start-time range filters.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+          example: ['origin:"ds.tv"', 'creator_affiliation_facet:"DR 1"']
+        - name: start
+          in: query
+          description: Zero-based record offset accepted by the public search endpoint.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 2000
+            default: 0
+        - name: rows
+          in: query
+          description: Number of results to request. Use 0 for facet counts.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 5000
+        - name: fl
+          in: query
+          description: Comma-separated list of fields to return in each record.
+          schema:
+            type: string
+          example: id,title,creator_affiliation_facet,startTime
+        - name: sort
+          in: query
+          schema:
+            type: string
+          example: startTime desc,id asc
+        - name: facet
+          in: query
+          schema:
+            type: boolean
+        - name: facet.limit
+          in: query
+          description: Use -1 to request all values for the configured facet fields.
+          schema:
+            type: integer
+          example: -1
+      responses:
+        '200':
+          description: Solr JSON result, served as application/octet-stream
+          content:
+            application/octet-stream:
+              schema:
+                $ref: '#/components/schemas/DrSearch'
+        '401':
+          description: Anonymous session cookie is missing or expired
+        '403':
+          description: Search rejected by the upstream query limits
+          content:
+            text/plain:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/PortalError'
+  /ds-api/bff/v1/proxy/record/{id}:
+    servers:
+      - url: https://www.kb.dk
+    get:
+      operationId: getDrArchiveRecord
+      tags: [DR-arkivet]
+      summary: Retrieve broadcast catalogue metadata as JSON-LD
+      security:
+        - DrArchiveSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: URL-encoded record ID from a search result.
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: true
+          schema:
+            const: JSON-LD
+      responses:
+        '200':
+          description: JSON-LD catalogue record, served as application/octet-stream
+          content:
+            application/octet-stream:
+              schema:
+                $ref: '#/components/schemas/DrRecord'
+        '401':
+          description: Anonymous session cookie is missing or expired
+        '404':
+          description: Record is unavailable for the anonymous session
+        default:
+          $ref: '#/components/responses/PortalError'
 components:
+  securitySchemes:
+    DrArchiveSession:
+      type: apiKey
+      in: cookie
+      name: Authorization
   parameters:
     Page:
       name: page
@@ -614,3 +756,94 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/TextRecord'
+    DrSearch:
+      type: object
+      required: [response]
+      properties:
+        response:
+          type: object
+          required: [numFound, start, docs]
+          properties:
+            numFound:
+              type: integer
+              minimum: 0
+            numFoundExact:
+              type: boolean
+            start:
+              type: integer
+              minimum: 0
+            docs:
+              type: array
+              items:
+                type: object
+                description: Broadcast record with the fields selected by fl.
+                properties:
+                  id:
+                    type: string
+                  title:
+                    type: [array, string]
+                    items:
+                      type: string
+                  origin:
+                    type: string
+                    examples: [ds.tv, ds.radio]
+                  creator_affiliation_facet:
+                    type: string
+                  startTime:
+                    type: string
+                    format: date-time
+                  endTime:
+                    type: string
+                    format: date-time
+                  duration_ms:
+                    type: number
+                  genre_facet:
+                    type: [array, string]
+                    items:
+                      type: string
+        facet_counts:
+          type: object
+          properties:
+            facet_fields:
+              type: object
+              additionalProperties:
+                type: array
+                description: Alternating field value and result count.
+                items:
+                  type: [string, integer]
+    DrRecord:
+      type: object
+      required: [id]
+      properties:
+        '@context':
+          type: string
+        '@type':
+          type: string
+          examples: [AudioObject, VideoObject]
+        id:
+          type: string
+        name:
+          type: [array, string]
+          items:
+            type: string
+        publication:
+          type: object
+          properties:
+            publishedOn:
+              type: object
+              properties:
+                alternateName:
+                  type: string
+                broadcastDisplayName:
+                  type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        duration:
+          type: string
+          format: duration
+        description:
+          type: string
